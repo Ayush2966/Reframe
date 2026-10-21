@@ -1554,6 +1554,11 @@ input[type='range']::-moz-range-thumb {
   flex: 1;
 }
 
+.share-card strong {
+  color: var(--text);
+  word-break: break-all;
+}
+
 .banner.quiet {
   border-color: var(--line);
   background: var(--panel);

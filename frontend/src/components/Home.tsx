@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Link2, Smartphone, Trash2, Upload, WifiOff } from 'lucide-react'
+import { Download, Link2, Share2, Smartphone, Trash2, Upload, WifiOff } from 'lucide-react'
 import { api, uploadVideo } from '../api'
 import { isIOS, isStandalone, isTouch, onThisMac } from '../device'
 import { openProject } from '../nav'
 import { dims, timecode } from '../lib/format'
-import { takeSharedVideo, useInstallPrompt } from '../pwa'
+import { takeShared, useInstallPrompt, type Shared } from '../pwa'
 import type { Project } from '../types'
 import { Wordmark } from './Wordmark'
 
@@ -61,24 +61,24 @@ export function Home() {
     onError: (e: Error) => setError(e.message),
   })
 
-  // Arriving from the share sheet (Android): upload the video or import the link.
+  // Arriving from the share sheet (Android). What was shared is read from the
+  // service worker's cache, never from the URL, and imported only after a tap:
+  // another site could open this page with ?share or POST to the share target.
+  const [shared, setShared] = useState<Shared | null>(null)
   const handledShare = useRef(false)
   useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const share = params.get('share')
-    if (!share || handledShare.current) return
+    if (!new URLSearchParams(location.search).has('share') || handledShare.current) return
     handledShare.current = true
     history.replaceState(null, '', '/' + location.hash)
-    if (share === 'file') {
-      takeSharedVideo().then((f) => (f ? startUpload(f) : setError("The shared video didn't come through. Try again.")))
-    } else if (share === 'link' && params.get('url')) {
-      importLink.mutate(params.get('url')!)
-    } else {
-      setError('Share a video file or a link to send it to Reframe.')
-    }
-    // startUpload and importLink are stable enough for a one-time hand-off.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    takeShared().then((s) => (s ? setShared(s) : setError('Share a video file or a link to send it to Reframe.')))
   }, [])
+
+  const acceptShared = () => {
+    if (!shared) return
+    if (shared.kind === 'file') startUpload(shared.file)
+    else importLink.mutate(shared.url)
+    setShared(null)
+  }
 
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteProject(id),
@@ -129,6 +129,20 @@ export function Home() {
             <span>{(health.error as Error).message}</span>
             <button className="btn small" onClick={() => health.refetch()}>
               Try again
+            </button>
+          </div>
+        )}
+        {shared && (
+          <div className="banner quiet share-card" role="dialog" aria-label="Shared with Reframe">
+            <Share2 size={18} />
+            <span>
+              Shared with Reframe: <strong>{shared.kind === 'file' ? shared.file.name : shared.url}</strong>
+            </span>
+            <button className="btn small primary" onClick={acceptShared}>
+              Add video
+            </button>
+            <button className="btn small quiet" onClick={() => setShared(null)}>
+              Dismiss
             </button>
           </div>
         )}

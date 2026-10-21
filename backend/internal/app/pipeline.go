@@ -66,7 +66,7 @@ func (r *renderer) runSinglePass(ctx context.Context) (string, error) {
 	s2 := r.plan.stage2(stage2Opts{InW: r.plan.WinW, InH: r.plan.WinH, Enhance: r.spec.Enhance, Look: r.spec.Look, OutPix: enc.OutPix})
 	out := r.output(enc.Ext)
 
-	args := append(r.plan.trimInput(), "-i", r.src, "-filter_complex", s1+";[s1]"+s2+"[out]", "-map", "[out]")
+	args := append(append(r.plan.trimInput(), safeInput(r.src)...), "-filter_complex", s1+";[s1]"+s2+"[out]", "-map", "[out]")
 	args = append(args, r.audioMap(0, enc)...)
 	args = append(args, enc.Video...)
 	args = append(args, "-fps_mode", "passthrough", out)
@@ -112,7 +112,7 @@ func (r *renderer) runAI(ctx context.Context) (string, error) {
 	}
 	m, rg := r.plan.Src.colorMatrix(), r.plan.Src.colorRange()
 	decArgs := append([]string{"-hide_banner", "-nostats", "-loglevel", "error"}, r.plan.trimInput()...)
-	decArgs = append(decArgs, "-i", r.src,
+	decArgs = append(append(decArgs, safeInput(r.src)...),
 		"-filter_complex", fmt.Sprintf("%s;[s1]scale=in_color_matrix=%s:in_range=%s,format=rgb24[out]", s1, m, rg),
 		"-map", "[out]", "-fps_mode", "cfr", "-r", fps, "-f", "image2pipe", "-c:v", "png", "-compression_level", "1", "pipe:1")
 	dec := exec.CommandContext(ctx, r.cfg.FFmpeg, decArgs...)
@@ -138,7 +138,7 @@ func (r *renderer) runAI(ctx context.Context) (string, error) {
 	s2 := r.plan.stage2(stage2Opts{InW: r.plan.WinW * 4, InH: r.plan.WinH * 4, InputRGB: true, Look: r.spec.Look, OutPix: enc.OutPix})
 	encArgs := []string{"-f", "image2pipe", "-framerate", fps, "-c:v", "png", "-i", "pipe:0"}
 	encArgs = append(encArgs, r.plan.trimInput()...)
-	encArgs = append(encArgs, "-i", r.src, "-filter_complex", "[0:v]"+s2+"[out]", "-map", "[out]")
+	encArgs = append(append(encArgs, safeInput(r.src)...), "-filter_complex", "[0:v]"+s2+"[out]", "-map", "[out]")
 	encArgs = append(encArgs, r.audioMap(1, enc)...)
 	encArgs = append(encArgs, enc.Video...)
 	encArgs = append(encArgs, "-shortest", out)
@@ -275,7 +275,7 @@ func (r *renderer) runCloud(ctx context.Context) (string, error) {
 		return "", err
 	}
 	framed := filepath.Join(r.workDir, "framed.mp4")
-	args := append(r.plan.trimInput(), "-i", r.src, "-filter_complex", s1, "-map", "[s1]",
+	args := append(append(r.plan.trimInput(), safeInput(r.src)...), "-filter_complex", s1, "-map", "[s1]",
 		"-c:v", "libx264", "-preset", "medium", "-crf", "12", "-pix_fmt", "yuv420p",
 		"-fps_mode", "cfr", "-r", r.plan.Src.FPSRational, "-an", framed)
 	err = ffmpegRun{Bin: r.cfg.FFmpeg, Dir: r.workDir, Args: args, Duration: r.plan.Dur, OnProgress: func(f float64) {
@@ -305,9 +305,9 @@ func (r *renderer) runCloud(ctx context.Context) (string, error) {
 	enc := encodingFor(r.spec.Quality, r.plan.Src, true)
 	out := r.output(enc.Ext)
 	s2 := r.plan.stage2(stage2Opts{InW: info.Width, InH: info.Height, Look: r.spec.Look, OutPix: enc.OutPix})
-	encArgs := []string{"-i", upscaled}
+	encArgs := safeInput(upscaled) // came back from the cloud: treat as untrusted
 	encArgs = append(encArgs, r.plan.trimInput()...)
-	encArgs = append(encArgs, "-i", r.src, "-filter_complex", "[0:v]"+s2+"[out]", "-map", "[out]")
+	encArgs = append(append(encArgs, safeInput(r.src)...), "-filter_complex", "[0:v]"+s2+"[out]", "-map", "[out]")
 	encArgs = append(encArgs, r.audioMap(1, enc)...)
 	encArgs = append(encArgs, enc.Video...)
 	encArgs = append(encArgs, "-shortest", out)
@@ -343,8 +343,8 @@ func renderFrame(ctx context.Context, cfg *Config, src string, plan Plan, spec R
 			enhance = "off"
 		}
 		s2 := plan.stage2(stage2Opts{InW: plan.WinW, InH: plan.WinH, Enhance: enhance, Look: spec.Look, OutPix: "yuv444p"})
-		return ff("-ss", seek, "-i", src, "-filter_complex", s1+";[s1]"+s2+","+toRGB+"[out]", "-map", "[out]",
-			"-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1")
+		return ff(append(append([]string{"-ss", seek}, safeInput(src)...), "-filter_complex", s1+";[s1]"+s2+","+toRGB+"[out]", "-map", "[out]",
+			"-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1")...)
 	}
 
 	if !cfg.AILocalAvailable() {
@@ -358,8 +358,8 @@ func renderFrame(ctx context.Context, cfg *Config, src string, plan Plan, spec R
 		return nil, err
 	}
 	defer os.RemoveAll(tmpDir)
-	framed, err := ff("-ss", seek, "-i", src, "-filter_complex", s1+";[s1]"+toRGB+"[out]", "-map", "[out]",
-		"-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1")
+	framed, err := ff(append(append([]string{"-ss", seek}, safeInput(src)...), "-filter_complex", s1+";[s1]"+toRGB+"[out]", "-map", "[out]",
+		"-frames:v", "1", "-f", "image2pipe", "-c:v", "png", "pipe:1")...)
 	if err != nil {
 		return nil, err
 	}

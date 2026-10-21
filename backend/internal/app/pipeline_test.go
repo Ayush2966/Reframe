@@ -316,3 +316,28 @@ func TestRenderFrameMatchesExportSize(t *testing.T) {
 	}
 	_ = os.Remove(src)
 }
+
+// A "video" that is really a playlist or a concat script must not make ffmpeg
+// open other files (local file disclosure via HLS/ffconcat).
+func TestPlaylistsPosingAsVideosAreRejected(t *testing.T) {
+	cfg := testConfig(t)
+	dir := t.TempDir()
+	segment, _ := makeVideo(t, cfg, "testsrc2=s=64x64:r=10:d=0.2")
+	cases := map[string]string{
+		"evil.m3u8": "#EXTM3U\n#EXTINF:1.0,\nfile://" + segment + "\n#EXT-X-ENDLIST\n",
+		"evil.mp4":  "ffconcat version 1.0\nfile " + filepath.Base(segment) + "\n",
+	}
+	for name, body := range cases {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := probe(context.Background(), cfg.FFprobe, path); err == nil {
+			t.Errorf("%s was accepted as a video", name)
+		}
+		args := append(append([]string{"-hide_banner", "-loglevel", "error"}, safeInput(path)...), "-f", "null", "-")
+		if exec.Command(cfg.FFmpeg, args...).Run() == nil {
+			t.Errorf("ffmpeg read %s through the guards", name)
+		}
+	}
+}

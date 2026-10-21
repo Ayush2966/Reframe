@@ -130,6 +130,7 @@ func (s *ProjectStore) fail(id string, err error) {
 // prepare probes the source and builds the browser preview (proxy) used for
 // playback and subject tracking. Renders always read the original file.
 func (a *App) prepare(id string) {
+	defer keepAwake()()
 	ctx := context.Background()
 	p, _ := a.projects.Get(id)
 	dir := a.projects.Dir(id)
@@ -171,7 +172,7 @@ func (a *App) makeProxy(ctx context.Context, id, src string, info *SourceInfo) e
 		audio = []string{"-map", "0:a:0", "-c:a", "aac", "-b:a", "128k", "-ac", "2"}
 	}
 	progress := func(f float64) { a.projects.Update(id, false, func(p *Project) { p.Progress = f }) }
-	base := []string{"-i", src, "-map", "0:v:0", "-vf", scale}
+	base := append(safeInput(src), "-map", "0:v:0", "-vf", scale)
 	tail := append(append([]string{}, audio...), "-movflags", "+faststart", "proxy.mp4")
 
 	// Hardware encoder first: it's several times faster on Apple silicon.
@@ -190,6 +191,7 @@ var ytPercent = regexp.MustCompile(`(\d+(?:\.\d+)?)%`)
 // download fetches a link with yt-dlp (YouTube, Instagram, X, direct .mp4
 // links, ...), picking the best video and audio available.
 func (a *App) download(id, link string) {
+	defer keepAwake()()
 	ctx := context.Background()
 	dir := a.projects.Dir(id)
 	if a.cfg.YtDlp == "" {

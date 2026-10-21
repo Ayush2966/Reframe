@@ -204,6 +204,7 @@ func (m *JobManager) run(id string) {
 		m.mu.Unlock()
 	}()
 
+	defer keepAwake()()
 	now := time.Now()
 	m.update(id, true, func(j *Job) { j.Status, j.StartedAt, j.Stage = "running", &now, "Starting" })
 	file, err := m.render(ctx, id)
