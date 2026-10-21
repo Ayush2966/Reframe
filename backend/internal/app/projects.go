@@ -171,7 +171,7 @@ func (a *App) makeProxy(ctx context.Context, id, src string, info *SourceInfo) e
 		audio = []string{"-map", "0:a:0", "-c:a", "aac", "-b:a", "128k", "-ac", "2"}
 	}
 	progress := func(f float64) { a.projects.Update(id, false, func(p *Project) { p.Progress = f }) }
-	base := []string{"-i", src, "-map", "0:v:0", "-vf", scale}
+	base := append(safeInput(src), "-map", "0:v:0", "-vf", scale)
 	tail := append(append([]string{}, audio...), "-movflags", "+faststart", "proxy.mp4")
 
 	// Hardware encoder first: it's several times faster on Apple silicon.

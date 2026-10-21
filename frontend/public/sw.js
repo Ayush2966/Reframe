@@ -5,7 +5,7 @@
 // - Receives videos and links from the Android share sheet.
 // - Shows "render finished" notifications.
 
-const SHELL = 'reframe-shell-v1'
+const SHELL = 'reframe-shell-v2'
 const ASSETS = 'reframe-assets-v1'
 const SHARE = 'reframe-share'
 const KEEP = [SHELL, ASSETS, SHARE]
@@ -14,7 +14,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(SHELL)
-      .then((c) => c.addAll(['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png', '/icons/badge-96.png'])),
+      .then((c) =>
+        c.addAll(['/', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.png', '/icons/badge-96.png']),
+      ),
   )
   self.skipWaiting()
 })
@@ -97,14 +99,18 @@ function fetchWithTimeout(req, ms) {
   })
 }
 
-/** Share sheet → Reframe. A video is parked in a cache for the page to upload;
- *  a link (YouTube, Instagram...) goes to the link importer. */
+/** Share sheet → Reframe. The video or link is parked in a cache and the page
+ *  asks before importing it: a hostile page can also POST here (a form
+ *  navigation), so nothing is imported without a tap, and nothing is ever
+ *  read from the URL. */
 async function receiveShare(req) {
   try {
     const form = await req.formData()
+    const cache = await caches.open(SHARE)
+    await cache.delete('/shared-video')
+    await cache.delete('/shared-link')
     const file = form.getAll('video').find((f) => f && typeof f === 'object' && f.size > 0)
     if (file) {
-      const cache = await caches.open(SHARE)
       await cache.put(
         '/shared-video',
         new Response(file, {
@@ -114,11 +120,14 @@ async function receiveShare(req) {
           },
         }),
       )
-      return Response.redirect('/?share=file', 303)
+      return Response.redirect('/?share=1', 303)
     }
     const words = ['url', 'text', 'title'].map((k) => String(form.get(k) || '')).join(' ')
     const link = words.match(/https?:\/\/\S+/)
-    if (link) return Response.redirect('/?share=link&url=' + encodeURIComponent(link[0]), 303)
+    if (link) {
+      await cache.put('/shared-link', new Response(link[0], { headers: { 'Content-Type': 'text/plain' } }))
+      return Response.redirect('/?share=1', 303)
+    }
   } catch {
     /* fall through */
   }

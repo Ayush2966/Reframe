@@ -95,16 +95,27 @@ export async function disablePush(): Promise<PushState> {
   return 'off'
 }
 
-// --- videos shared from the Android share sheet ---------------------------
+// --- videos and links shared from the Android share sheet ------------------
 
-/** A video the service worker received from the share sheet, if any. */
-export async function takeSharedVideo(): Promise<File | null> {
+export type Shared = { kind: 'file'; file: File } | { kind: 'link'; url: string }
+
+/** What the service worker received from the share sheet, if anything. It is
+ *  only read here, never from the page URL, and the caller asks before importing. */
+export async function takeShared(): Promise<Shared | null> {
   if (!('caches' in window)) return null
   const cache = await caches.open('reframe-share')
-  const res = await cache.match('/shared-video')
-  if (!res) return null
-  const blob = await res.blob()
+  const video = await cache.match('/shared-video')
+  const link = await cache.match('/shared-link')
   await cache.delete('/shared-video')
-  const name = decodeURIComponent(res.headers.get('X-File-Name') ?? 'shared-video.mp4')
-  return new File([blob], name, { type: blob.type || 'video/mp4' })
+  await cache.delete('/shared-link')
+  if (video) {
+    const blob = await video.blob()
+    const name = decodeURIComponent(video.headers.get('X-File-Name') ?? 'shared-video.mp4')
+    return { kind: 'file', file: new File([blob], name, { type: blob.type || 'video/mp4' }) }
+  }
+  if (link) {
+    const url = (await link.text()).trim()
+    if (/^https?:\/\/\S+$/.test(url)) return { kind: 'link', url }
+  }
+  return null
 }

@@ -64,9 +64,21 @@ type probeOutput struct {
 	} `json:"format"`
 }
 
+// Videos come from uploads and links, so ffmpeg must only treat them as plain
+// media files. Without these limits a "video" that is really an HLS playlist
+// or an ffconcat script makes ffmpeg open other files on this Mac.
+const safeDemuxers = "mov,matroska,webm,avi,mpegts,mxf,flv,mpeg,asf,ogg,dv"
+
+var inputGuards = []string{"-protocol_whitelist", "file", "-format_whitelist", safeDemuxers}
+
+// safeInput is "-i path" for a file that came from outside.
+func safeInput(path string) []string {
+	return append(append([]string{}, inputGuards...), "-i", path)
+}
+
 func probe(ctx context.Context, ffprobe, path string) (*SourceInfo, error) {
-	out, err := exec.CommandContext(ctx, ffprobe, "-v", "error", "-print_format", "json",
-		"-show_streams", "-show_format", path).Output()
+	args := append(append([]string{"-v", "error"}, inputGuards...), "-print_format", "json", "-show_streams", "-show_format", path)
+	out, err := exec.CommandContext(ctx, ffprobe, args...).Output()
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
