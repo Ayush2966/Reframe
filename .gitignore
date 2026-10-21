@@ -1,0 +1,13 @@
+# local data: imported videos, renders
+data/
+bin/
+.env
+
+# downloaded by scripts/setup.sh
+tools/realesrgan/
+frontend/public/models/
+frontend/public/mediapipe/
+
+node_modules/
+frontend/dist/
+.DS_Store
