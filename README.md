@@ -13,6 +13,8 @@ make run     # builds and serves the app at http://localhost:8787
 
 For development with hot reload use `make dev` and open http://localhost:5173. Run the tests with `make test`.
 
+**Keep it running in the background:** `make autostart` starts Reframe whenever you log in and restarts it if it stops. Undo it with `make autostart-off`. macOS doesn't let background apps read the Desktop, Documents or Downloads folders, so move the `reframe` folder out of those first, for example to `~/Developer/reframe`. While a render, import or download runs, Reframe keeps the Mac from idle-sleeping; closing the lid still puts it to sleep.
+
 Optional: to use **AI upscale in the cloud**, copy `.env.example` to `.env`, add your `REPLICATE_API_TOKEN`, and restart. Topaz Video Upscale bills your Replicate account for each video.
 
 ## On your phone (iPhone and Android)

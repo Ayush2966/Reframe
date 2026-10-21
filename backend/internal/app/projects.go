@@ -130,6 +130,7 @@ func (s *ProjectStore) fail(id string, err error) {
 // prepare probes the source and builds the browser preview (proxy) used for
 // playback and subject tracking. Renders always read the original file.
 func (a *App) prepare(id string) {
+	defer keepAwake()()
 	ctx := context.Background()
 	p, _ := a.projects.Get(id)
 	dir := a.projects.Dir(id)
@@ -190,6 +191,7 @@ var ytPercent = regexp.MustCompile(`(\d+(?:\.\d+)?)%`)
 // download fetches a link with yt-dlp (YouTube, Instagram, X, direct .mp4
 // links, ...), picking the best video and audio available.
 func (a *App) download(id, link string) {
+	defer keepAwake()()
 	ctx := context.Background()
 	dir := a.projects.Dir(id)
 	if a.cfg.YtDlp == "" {

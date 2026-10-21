@@ -1,4 +1,4 @@
-.PHONY: setup dev run build test phone
+.PHONY: setup dev run build test phone autostart autostart-off
 
 # First-time setup: tools, AI upscaler, tracking models, npm packages.
 setup:
@@ -26,3 +26,10 @@ test:
 # Open Reframe on your phones: private HTTPS address via Tailscale.
 phone:
 	./scripts/phone.sh
+
+# Run Reframe in the background whenever you're logged in (restarts if it stops).
+autostart: build
+	./scripts/autostart.sh on
+
+autostart-off:
+	./scripts/autostart.sh off

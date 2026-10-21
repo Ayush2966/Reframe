@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -148,6 +149,20 @@ func probe(ctx context.Context, ffprobe, path string) (*SourceInfo, error) {
 		return nil, errors.New("couldn't read the video's size or length")
 	}
 	return info, nil
+}
+
+// keepAwake stops the Mac from idle-sleeping until the returned func runs, so
+// a long render or download finishes when nobody is touching the Mac. It ends
+// with this process too (caffeinate -w). Closing the lid still sleeps.
+func keepAwake() func() {
+	cmd := exec.Command("caffeinate", "-i", "-w", strconv.Itoa(os.Getpid()))
+	if cmd.Start() != nil {
+		return func() {}
+	}
+	return func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}
 }
 
 func abs(v int) int {
